@@ -1,0 +1,303 @@
+---
+title: "Predicitive Analytics Exam Module 7, Section 2"
+
+---
+If you are using R 3.6.0 or later, the following command will ensure that the random number generator being used is the same as in prior versions of R. Because these modules were developed using R 3.5.0, output that depends on random numbers used the older generator. Running this code will have your output match that shown in the modules.
+
+```{r}
+# Run this chunk if using R 3.6.0 or later.
+RNGkind(sample.kind = "Rounding")
+```
+
+If you are using R 4.0.0 or later, the following command will ensure that read.csv() interprets variables whose values are characters as factor variables. This was the default behavior in prior versions of R. All code is written assuming such variables are factor variables.
+
+```{r}
+# Run this chunk if using R 4.0.0 or later. You may get what looks like an error message. It can be ignored.
+options(stringsAsFactors = TRUE)
+```
+
+Run CHUNK 1 to load the Breast Cancer data and ensure it is ready for use.
+
+```{r}
+# CHUNK 1
+# The following command cleans the working memory and ensures that all references are to items created in this file.
+rm(list = (ls()))
+
+# Load data and take a quick look at the summary.
+data.all <- read.csv("BreastCancerWisconsinDataSet.csv")
+summary(data.all)
+
+# Some simple cleaning and setup.
+
+# Set the target.
+data.all$target [data.all$diagnosis == "M"] <- 1
+data.all$target [data.all$diagnosis == "B"] <- 0
+
+# Retain only those variables available for training.
+vars <- names(data.all)[c(-1, -2)]
+data.all <- data.all[c(-1, -2)]
+
+# Split data into training vs validation sets.
+
+library(caret)
+set.seed(1000)
+
+# Caret has a nice createDataPartition function that creates a train and test split. It performs stratified sampling based on the target variable.
+
+split <- createDataPartition(
+  y = data.all$target,
+  p = .7,
+  list = FALSE
+)
+
+data.training <- data.all[split, ]
+data.validation <- data.all[-split, ]
+```
+
+CHUNK 2 provides space to complete Exercise 7.2.2.
+
+```{r}
+# CHUNK 2
+library(rpart)
+library(rpart.plot)
+
+# Fit a decision tree
+
+# Plot the tree
+```
+
+CHUNK 3 provides a sample solution.
+
+```{r}
+# CHUNK 3
+library(rpart)
+library(rpart.plot)
+set.seed(1234)
+
+# Set the formula with all variables. Note the use of the "paste" function to create the formula rather than typing in all the variable names. Column 31 is the target variable, so needs to omitted from the right hand side of the formula specification.
+dt1.f <- as.formula(paste(vars[31], paste(vars[-31], collapse = " + "), sep = "~"))
+
+# Fit a decision tree and save to dt1, method = "class" ensures the target is treated as a categorical variable.
+dt1 <- rpart(dt1.f,
+  data = data.training, method = "class",
+  control = rpart.control(minbucket = 5, cp = 0.01, maxdepth = 5),
+  parms = list(split = "gini")
+)
+
+# Plot the tree.
+rpart.plot(dt1)
+```
+
+Run CHUNK 4 to look at the print summary:
+
+```{r}
+# CHUNK 4
+print(dt1)
+```
+
+Run CHUNK 5 to look at the complexity parameter.
+  
+```{r}
+# CHUNK 5
+printcp(dt1)
+plotcp(dt1)
+rpart.plot(dt1)
+```
+ 
+Run CHUNK 6 to extract the optimal complexity of the tree by taking the one with the minimum xerror:
+```{r}
+# CHUNK 6
+dt1$cptable[which.min(dt1$cptable[, "xerror"]), "CP"]
+```    
+
+Run CHUNK 7 to prune the tree.
+  
+```{r}
+# CHUNK 7
+# prune the tree
+pdt1 <- prune(dt1, cp = dt1$cptable[which.min(dt1$cptable[, "xerror"]), "CP"])
+
+# Plot the tree
+rpart.plot(pdt1)
+```  
+
+Run CHUNK 8 to load the AutoClaim data and prepare training and validation sets. 
+ 
+```{r}
+# CHUNK 8
+
+# Filter to CLM_AMT5 > 0 -> this is our target.
+# CLM_AMT5 is the total claim amount in the past 5 years.
+AutoClaim <- read.csv(file = "AutoClaim.csv")
+AutoClaim <- AutoClaim[which(AutoClaim$CLM_AMT5 > 0), ]
+
+# Split data to training and validation.
+library(caret)
+set.seed(1000)
+split <- createDataPartition(
+  y = AutoClaim$CLM_AMT5,
+  p = .7,
+  list = FALSE
+)
+AutoClaim.training <- AutoClaim[split, ]
+AutoClaim.validation <- AutoClaim[-split, ]
+
+summary(AutoClaim)
+
+# Set the formula with all variables (we won't want to train on CLM_FREQ5 or CLM_AMT).
+vars <- names(AutoClaim.training)[c(-1, -2, -3, -5)]
+dt2.f <- as.formula(paste(vars[1], paste(vars[-1], collapse = " + "), sep = "~"))
+```
+
+Run CHUNK 9 to make a tree using all the predictors. Note the various parameter settings.
+NOTE: rpart uses cross validation to determine the prediction error for each level of the complexity parameter investigated. This requires random numbers. Because there is no seed set in CHUNK 9 a different xerror will result if it is rerun. To match the output in the module, if CHUNKs 9-11 are rerun, first run CHUNK 8 to reset the seed.
+
+```{r}
+# CHUNK 9
+library(rpart)
+
+# Fit a decision tree and save to dt2. Setting cp to 0 ensures the most complex tree (with the constraints on minbucket and maxdepth) will be built.
+dt2 <- rpart(dt2.f,
+  data = AutoClaim.training,
+  method = "anova",
+  control = rpart.control(
+    minbucket = 10,
+    cp = 0,
+    maxdepth = 10
+  ),
+  parms = list(split = "information")
+)
+```
+
+Run CHUNK 10 to get a summary.
+
+```{r}
+# CHUNK 10
+summary(dt2)
+```
+
+Run CHUNK 11 to prune the tree.
+
+```{r}
+# CHUNK 11
+pdt2 <- prune(dt2, cp = dt2$cptable[which.min(dt2$cptable[, "xerror"]), "CP"])
+rpart.plot(pdt2)
+print(pdt2)
+summary(pdt2)
+```
+
+The caret package can do many things other than creating train and test partitions. CHUNK 12 assumes the training file from before is still available.
+
+```{r}
+# CHUNK 12
+
+library(caret)
+library(rpart.plot)
+
+# Set up contol parameters.
+fitControl <- trainControl(method = "cv", number = 6) # Set 6 cross validation folds
+Grid <- expand.grid(cp = seq(0, 0.05, 0.005)) # Search parameter cp (complexity parameter) from 0 to 0.05 by 0.005 increments.
+
+# Fit a decision tree and save to caret1.
+set.seed(1000)
+caret1 <- train(dt2.f,
+  data = AutoClaim.training,
+  method = "rpart",
+  trControl = fitControl,
+  metric = "RMSE",
+  tuneGrid = Grid,
+  na.action = na.pass
+)
+
+plot(caret1)
+rpart.plot(caret1$finalModel) # Final model selects the arrived upon model.
+```
+
+CHUNK 13 repeats the code from the previous section. It uses the code from R for Everyone to fit a tree using rpart. The confusion matrix is created manually here. We will see that caret has a function for this.
+
+```{r}
+# CHUNK 13
+
+# Load the needed libraries
+library(rpart)
+library(rpart.plot)
+
+# The file name is german.csv as it is credit data from Germany.
+credit <- read.csv(file = "german.csv")
+head(credit)
+
+# R for Everyone provides a key to decode the factor levels, we will use them as is except for re-coding the target variable, "Credit." This is needed because the data as provided is numeric and hence rpart will try and fit a regression tree and not a classification tree. As an aside, at your exam if you want to do this but are stumped regarding R commands, you could make these changes in Excel prior to reading the file in to R.
+
+credit$Credit <- ifelse(credit$Credit == 1, "Good", "Bad")
+
+
+# Fit the tree using selected variables. Parameters will take default values.
+tree <- rpart(Credit ~ CreditAmount + Age + CreditHistory + Employment, data = credit)
+
+# Display the output from fitting the true.
+tree
+
+# Plot the tree, use ?rpart.plot in the Console to see how extra = 4 affects the output.
+rpart.plot(tree, extra = 4)
+
+
+# Pull out confusion matrix.
+pred <- predict(tree, type = "class") # Generate predictions.
+conf.matrix <- table(pred, credit$Credit) # Create confusion matrix.
+print(conf.matrix)
+print(paste("Accuracy: ", sum(diag(conf.matrix)) / sum(conf.matrix), sep = "")) # One way to arrive at a confusion matrix.
+```
+
+Use the space in CHUNK 14 to use caret to fit the same model. Be sure to use trainControl and expand.grid as in the earlier example. CHUNK 15 has a solution. Note that the model differs from the one using rpart. The solution assumes CHUNK 13 has been run so the data is ready to use. Also note that in the solution the confusion matrix can be made from a caret command.
+
+```{r}
+# CHUNK 14
+
+```
+
+
+```{r}
+# CHUNK 15
+library(rpart)
+library(caret)
+library(rpart.plot)
+set.seed(10)
+fitControl <- trainControl(method = "cv", number = 6)
+
+Grid <- expand.grid(cp = seq(0, 0.1, 0.001))
+
+credit.f <- as.formula(Credit ~ CreditAmount + Age + CreditHistory + Employment)
+
+
+credit.m <- train(credit.f,
+  data = credit,
+  method = "rpart",
+  trControl = fitControl,
+  metric = "Accuracy",
+  tuneGrid = Grid,
+  na.action = na.omit,
+  parms = list(split = "information")
+)
+
+credit.m$finalModel # Best model can be accessed with the caret_model_object$finalModel call.
+
+plot(credit.m)
+rpart.plot(credit.m$finalModel, extra = 4)
+
+pred_caret <- predict(credit.m, type = "raw")
+
+confusionMatrix(pred_caret, factor(credit$Credit)) # Arrive at confusion matrix with caret.
+```
+
+Caret is able to get predicted probabilities for classes as well.  Run CHUNK 16 to see this.
+
+```{r}
+# CHUNK 16
+# Example of how to use caret to predict probabilities.
+pred <- predict(credit.m$finalModel) # Predict probabilities.
+print("Predicted Probabilities")
+head(pred)
+pred_class <- predict(credit.m$finalModel, type = "class") # Predict classes
+print("Predicted classes")
+head(pred_class)
+```
